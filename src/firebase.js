@@ -13,16 +13,29 @@ const firebaseConfig = {
 
 // Check if Firebase credentials are fully provided or using default placeholder
 export const isFirebaseConfigured = () => {
-  return (
-    Boolean(firebaseConfig.apiKey) &&
+  return Boolean(
+    firebaseConfig.apiKey &&
     firebaseConfig.apiKey !== 'your_api_key_here' &&
     firebaseConfig.apiKey !== 'AIzaSyExampleKeyReplaceWithYourOwn' &&
-    Boolean(firebaseConfig.projectId)
+    firebaseConfig.projectId &&
+    firebaseConfig.projectId !== 'your_project_id'
   );
 };
 
-// Initialize Firebase safely
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Initialize Firebase safely without throwing on missing env variables
+let app = null;
+let auth = null;
+let db = null;
+
+if (isFirebaseConfigured()) {
+  try {
+    app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (err) {
+    console.warn('Firebase initialization skipped or failed:', err);
+  }
+}
+
+export { app, auth, db };
 export default app;

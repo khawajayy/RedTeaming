@@ -24,7 +24,7 @@ export default function Auth() {
   const [submittingGoogle, setSubmittingGoogle] = useState(false);
   const [submittingEmail, setSubmittingEmail] = useState(false);
 
-  const { loginWithGoogle, loginWithEmail, signupWithEmail, authError, setAuthError, isConfigured } = useAuth();
+  const { loginWithGoogle, loginWithEmail, signupWithEmail, loginAsGuest, authError, setAuthError, isConfigured } = useAuth();
 
   const handleGoogleSignIn = async () => {
     setLocalError('');
@@ -37,6 +37,12 @@ export default function Auth() {
     } finally {
       setSubmittingGoogle(false);
     }
+  };
+
+  const handleGuestSignIn = () => {
+    setLocalError('');
+    setAuthError(null);
+    loginAsGuest();
   };
 
   const handleEmailSubmit = async (e) => {
@@ -93,12 +99,12 @@ export default function Auth() {
 
         {/* Missing Config Notice if applicable */}
         {!isConfigured && (
-          <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="mb-6 p-4 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 text-xs flex items-start gap-3">
+            <Terminal className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-amber-200">Firebase Not Configured Yet</p>
-              <p className="mt-1 text-slate-300">
-                Please update your <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-400">.env</code> file with your Firebase credentials to enable Google authentication and Firestore syncing.
+              <p className="font-semibold text-white">Live Demo Sandbox Active</p>
+              <p className="mt-1 text-slate-400">
+                You can explore the full interactive Kanban board in Demo Mode or configure Firebase anytime.
               </p>
             </div>
           </div>
@@ -115,19 +121,29 @@ export default function Auth() {
             </div>
           )}
 
-          {/* Primary: Google Sign-in */}
-          <div className="space-y-4">
+          {/* Quick Access Actions */}
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={handleGuestSignIn}
+              className="w-full py-3 px-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-red-900/30 flex items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer group"
+            >
+              <Terminal className="w-4 h-4 text-red-200 group-hover:rotate-12 transition-transform" />
+              <span>Launch Live Kanban Demo</span>
+              <ArrowRight className="w-4 h-4 text-red-200 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+
+            {/* Primary: Google Sign-in */}
             <button
               type="button"
               onClick={handleGoogleSignIn}
               disabled={submittingGoogle}
-              className="w-full py-3 px-4 bg-white hover:bg-slate-100 text-slate-900 font-semibold text-sm rounded-xl shadow-lg shadow-white/10 flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group border border-slate-200"
+              className="w-full py-3 px-4 bg-slate-800/90 hover:bg-slate-700/90 text-slate-100 font-semibold text-sm rounded-xl border border-slate-700 flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
             >
               {submittingGoogle ? (
-                <div className="w-5 h-5 border-2 border-slate-400 border-t-slate-900 rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-slate-400 border-t-slate-100 rounded-full animate-spin" />
               ) : (
                 <>
-                  {/* Official Google 'G' Icon */}
                   <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                     <path
                       fill="#4285F4"
@@ -150,13 +166,14 @@ export default function Auth() {
                 </>
               )}
             </button>
+          </div>
 
-            <div className="relative my-4 flex items-center justify-center">
-              <div className="border-t border-slate-800 w-full" />
-              <span className="bg-slate-900 px-3 text-[11px] font-mono text-slate-500 uppercase tracking-wider absolute">
-                Or Use Credentials
-              </span>
-            </div>
+          <div className="relative my-5 flex items-center justify-center">
+            <div className="border-t border-slate-800 w-full" />
+            <span className="bg-slate-900 px-3 text-[11px] font-mono text-slate-500 uppercase tracking-wider absolute">
+              Or Email Sign-in
+            </span>
+          </div>
 
             {/* Email/Password Toggle */}
             <button
@@ -236,7 +253,6 @@ export default function Auth() {
                 </button>
               </form>
             )}
-          </div>
 
         </div>
 

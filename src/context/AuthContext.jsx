@@ -9,6 +9,8 @@ import {
 } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '../firebase';
 
+const GUEST_STORAGE_KEY = 'redteam_guest_user';
+
 const AuthContext = createContext({
   user: null,
   loading: true,
@@ -16,6 +18,7 @@ const AuthContext = createContext({
   loginWithGoogle: async () => {},
   loginWithEmail: async () => {},
   signupWithEmail: async () => {},
+  loginAsGuest: () => {},
   logout: async () => {},
   authError: null,
   setAuthError: () => {}
@@ -25,10 +28,22 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
-  const isConfigured = isFirebaseConfigured();
+  const isConfigured = isFirebaseConfigured() && Boolean(auth);
 
   useEffect(() => {
-    if (!isConfigured) {
+    // Check if user was previously in guest/demo mode
+    const storedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
+    if (storedGuest) {
+      try {
+        setUser(JSON.parse(storedGuest));
+        setLoading(false);
+        return;
+      } catch (e) {
+        localStorage.removeItem(GUEST_STORAGE_KEY);
+      }
+    }
+
+    if (!isConfigured || !auth) {
       setLoading(false);
       return;
     }
@@ -42,19 +57,42 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, [isConfigured]);
+
+  const loginAsGuest = (customName = 'Red Team Operator') => {
+    setAuthError(null);
+    const guestUser = {
+      uid: 'guest-operator',
+      displayName: customName,
+      email: 'guest@redteam.local',
+      isGuest: true,
+      photoURL: null
+    };
+    try {
+      localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guestUser));
+    } catch (e) {
+      console.warn('LocalStorage unavailable for guest user');
+    }
+    setUser(guestUser);
+    return guestUser;
+  };
 
   const loginWithGoogle = async () => {
     setAuthError(null);
+    if (!isConfigured || !auth) {
+      // If Firebase not configured, fallback gracefully to guest mode
+      return loginAsGuest('Google Operator (Demo)');
+    }
     try {
       const provider = new GoogleAuthProvider();
-      // Optional: prompt account selection
       provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
+      localStorage.removeItem(GUEST_STORAGE_KEY);
       return result.user;
     } catch (err) {
-      // Don't show an intrusive error if user simply closed the popup
       if (err.code === 'auth/popup-closed-by-user') {
         return null;
       }
@@ -65,8 +103,13 @@ export function AuthProvider({ children }) {
 
   const loginWithEmail = async (email, password) => {
     setAuthError(null);
+    if (!isConfigured || !auth) {
+      const name = email.split('@')[0] || 'Operator';
+      return loginAsGuest(`${name} (Demo)`);
+    }
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      localStorage.removeItem(GUEST_STORAGE_KEY);
       return userCredential.user;
     } catch (err) {
       setAuthError(formatFirebaseError(err));
@@ -76,8 +119,13 @@ export function AuthProvider({ children }) {
 
   const signupWithEmail = async (email, password) => {
     setAuthError(null);
+    if (!isConfigured || !auth) {
+      const name = email.split('@')[0] || 'Operator';
+      return loginAsGuest(`${name} (Demo)`);
+    }
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      localStorage.removeItem(GUEST_STORAGE_KEY);
       return userCredential.user;
     } catch (err) {
       setAuthError(formatFirebaseError(err));
@@ -87,12 +135,15 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     setAuthError(null);
-    try {
-      await signOut(auth);
-    } catch (err) {
-      setAuthError(formatFirebaseError(err));
-      throw err;
+    localStorage.removeItem(GUEST_STORAGE_KEY);
+    if (auth) {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        setAuthError(formatFirebaseError(err));
+      }
     }
+    setUser(null);
   };
 
   return (
@@ -103,6 +154,7 @@ export function AuthProvider({ children }) {
       loginWithGoogle,
       loginWithEmail,
       signupWithEmail,
+      loginAsGuest,
       login: loginWithEmail,
       signup: signupWithEmail,
       logout, 

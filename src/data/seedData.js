@@ -221,12 +221,33 @@ export const INITIAL_ROADMAP_DATA = [
 ];
 
 /**
- * Seeds the 24 milestones to Firestore for the specified user using a Batch Write.
+ * Seeds the 24 milestones to Firestore (or local state) for the specified user.
  * Checks if documents already exist to prevent unwanted overwrites unless forced.
  */
 export async function seedRoadmapData(userId, force = false) {
   if (!userId) {
     throw new Error("User ID is required to seed roadmap data.");
+  }
+
+  // If Firebase is not configured or in offline demo mode, return formatted items
+  if (!db) {
+    const localItems = INITIAL_ROADMAP_DATA.map((item) => {
+      const mNum = item.month.replace(/\D/g, '');
+      const wNum = item.week.replace(/\D/g, '');
+      return {
+        ...item,
+        id: `m${mNum}-w${wNum}`,
+        userId: userId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    });
+    return { 
+      seeded: true, 
+      count: localItems.length, 
+      data: localItems, 
+      message: "Successfully seeded 24 milestones locally!" 
+    };
   }
 
   const roadmapColRef = collection(db, 'users', userId, 'roadmap');
@@ -242,7 +263,6 @@ export async function seedRoadmapData(userId, force = false) {
   const now = new Date().toISOString();
 
   INITIAL_ROADMAP_DATA.forEach((item) => {
-    // Custom document ID format: m1-w1, m1-w2, etc. for easy reference & idempotence
     const mNum = item.month.replace(/\D/g, '');
     const wNum = item.week.replace(/\D/g, '');
     const docId = `m${mNum}-w${wNum}`;

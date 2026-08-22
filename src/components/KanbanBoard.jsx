@@ -57,12 +57,38 @@ export default function KanbanBoard() {
   const keyboardSensor = useSensor(KeyboardSensor);
   const sensors = useSensors(pointerSensor, touchSensor, keyboardSensor);
 
-  // Real-time Firestore sync via onSnapshot
+  const LOCAL_STORAGE_CARDS_KEY = `redteam_kanban_cards_${user?.uid || 'guest'}`;
+
+  // Real-time Firestore sync or LocalStorage fallback
   useEffect(() => {
     if (!user) return;
 
     setLoading(true);
     setFirestoreError(null);
+
+    // If in demo mode or Firestore is not available, use localStorage
+    if (user.isGuest || !db) {
+      try {
+        const stored = localStorage.getItem(LOCAL_STORAGE_CARDS_KEY);
+        if (stored) {
+          setCards(JSON.parse(stored));
+        } else {
+          // Initialize with default 24 milestones
+          const initial = seedRoadmapData(user.uid, true);
+          initial.then((res) => {
+            if (res.data) {
+              setCards(res.data);
+              localStorage.setItem(LOCAL_STORAGE_CARDS_KEY, JSON.stringify(res.data));
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('LocalStorage error:', e);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     const roadmapColRef = collection(db, 'users', user.uid, 'roadmap');
     const q = query(roadmapColRef, orderBy('order', 'asc'));
@@ -80,11 +106,18 @@ export default function KanbanBoard() {
       (error) => {
         console.error('Firestore onSnapshot error:', error);
         setFirestoreError(error.message);
+        // Fallback to localStorage on Firestore error
+        try {
+          const stored = localStorage.getItem(LOCAL_STORAGE_CARDS_KEY);
+          if (stored) setCards(JSON.parse(stored));
+        } catch (e) {}
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, [user]);
 
   // Seeding handler
@@ -95,6 +128,12 @@ export default function KanbanBoard() {
     try {
       const result = await seedRoadmapData(user.uid, force);
       if (result.seeded) {
+        if (result.data) {
+          setCards(result.data);
+          try {
+            localStorage.setItem(LOCAL_STORAGE_CARDS_KEY, JSON.stringify(result.data));
+          } catch (e) {}
+        }
         setSeedSuccessMessage('Successfully initialized 24 AI Red Teaming milestones!');
         setTimeout(() => setSeedSuccessMessage(''), 6000);
       } else {
@@ -109,24 +148,31 @@ export default function KanbanBoard() {
     }
   };
 
-  // Instant update status in Firestore
+  // Update card status (sync to Firestore or LocalStorage)
   const updateCardStatus = async (cardId, newStatus) => {
     if (!user || !cardId || !newStatus) return;
 
     // Optimistic UI state update
-    setCards((prev) =>
-      prev.map((c) => (c.id === cardId ? { ...c, status: newStatus } : c))
-    );
+    const updatedCards = cards.map((c) => (c.id === cardId ? { ...c, status: newStatus } : c));
+    setCards(updatedCards);
 
+    // Save locally
     try {
-      const cardRef = doc(db, 'users', user.uid, 'roadmap', cardId);
-      await updateDoc(cardRef, {
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Failed to update card status:', err);
-      setFirestoreError('Failed to sync changes with Firestore. ' + err.message);
+      localStorage.setItem(LOCAL_STORAGE_CARDS_KEY, JSON.stringify(updatedCards));
+    } catch (e) {}
+
+    // If Firestore is available, sync to Firestore
+    if (db && !user.isGuest) {
+      try {
+        const cardRef = doc(db, 'users', user.uid, 'roadmap', cardId);
+        await updateDoc(cardRef, {
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('Failed to update card status in Firestore:', err);
+        setFirestoreError('Firestore sync warning: ' + err.message);
+      }
     }
   };
 
